@@ -7,10 +7,9 @@ from collections.abc import Iterable
 
 import numpy as np
 
-import ross
-from rossT.materials import Material
-from rossT.stochastic.st_results_elements import plot_histogram
-from rossT.units import check_units
+from ross.materials import Material
+from ross.stochastic.st_results_elements import plot_histogram
+from ross.units import check_units
 
 __all__ = ["ST_Material"]
 

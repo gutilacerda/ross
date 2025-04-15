@@ -14,9 +14,8 @@ from plotly import express as px
 from plotly import graph_objects as go
 from plotly.subplots import make_subplots
 
-#import rossT
-from rossT.plotly_theme import tableau_colors
-from rossT.units import Q_
+from ross.plotly_theme import tableau_colors
+from ross.units import Q_
 
 # set Plotly palette of colors
 colors1 = px.colors.qualitative.Dark24

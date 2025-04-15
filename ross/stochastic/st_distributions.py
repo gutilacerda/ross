@@ -8,13 +8,12 @@ from collections.abc import Iterable
 import numpy as np
 import scipy as sp
 
-import ross
-from rossT.units import check_units
+from ross.units import check_units
 
 __all__ = ["ST_Distribution"]
 
 class ST_Distribution:
-    """Create instance of Material with random parameters.
+    """Create instance of Distribution for parameters.
 
     Class used to create a probabilistic distribution and define its properties.
     Type of PDF, its conditions and the parameter or the rotor associated 
@@ -47,7 +46,7 @@ class ST_Distribution:
     ):
         self.name = name
         if " " in name:
-            raise ValueError("Spaces are not allowed in Material name")
+            raise ValueError("Spaces are not allowed in Distribution name")
         self.param = str(param)
         self.info = info
         

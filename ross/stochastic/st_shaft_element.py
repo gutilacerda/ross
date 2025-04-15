@@ -5,9 +5,9 @@ analysis.
 """
 
 #import ross
-from rossT.shaft_element import ShaftElement
+from ross.shaft_element import ShaftElement
 #from stochastic.st_materials import ST_Material2
-from rossT.units import Q_, check_units
+from ross.units import Q_, check_units
 
 from st_materials import ST_Material2
 

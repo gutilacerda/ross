@@ -5,12 +5,10 @@ analysis.
 """
 import numpy as np
 
-import ross
-
-from rossT.disk_element import DiskElement
-from rossT.stochastic.st_materials import ST_Material
-from rossT.stochastic.st_results_elements import plot_histogram
-from rossT.units import check_units
+from ross.disk_element import DiskElement
+from ross.stochastic.st_materials import ST_Material
+from ross.stochastic.st_results_elements import plot_histogram
+from ross.units import check_units
 
 __all__ = ["ST_DiskElement", "st_disk_example"]
 
