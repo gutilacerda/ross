@@ -1,7 +1,6 @@
-"""Distributions module.
+"""Make it stochastic module.
 
-This module defines the Distributions class and defines
-the distribution of each random parameter.
+This module convert an deterministic rotor to stochastic rotor.
 """
 
 import numpy as np
@@ -9,6 +8,7 @@ import scipy as sp
 
 from st_bearing_seal_element import ST_BearingElement2
 from st_distributions import ST_Distribution
+from st_rotor_assembly import ST_Rotor2
 
 from ross.units import check_units
 
@@ -29,77 +29,96 @@ class ST_Make_it_Stochastic():
 
     Examples
     --------
-    >>> # Steel with random Young's modulus.
-    >>> from st_distributions import ST_Distribution 
-    >>> import numpy as np
-    >>> E = np.random.uniform(208e9, 211e9, 5)
-    >>> dist_E = ST_Distribution(name="Normal", info=[208e9, 211e9], param="E")
-    >>> dist_E.value(1)
-    array([6.32013755e+10])
+    
     """
 
     @check_units
     def __init__(
-        self, rotor, element, params, distribution = Normal ,erro = 5/100, **kwargs
+        self, rotor, elements, params, distribution = 'Normal' ,erro = 5/100, **kwargs
     ):
         self.rotor = rotor
-        self.element = element
-        if " " in element:
+        self.elements = elements
+        if " " in elements:
             raise ValueError("Spaces are not allowed in Element name")
         self.params = params
-        self.distribution = str(distribution)
+        self.distribution = distribution
         self.erro = erro
         
         attribute_dict = dict(
             rotor=rotor
-            element=element,
+            elements=elements,
             params=params,
             distribution = distribution,
             erro=erro,
         )
         self.attribute_dict = attribute_dict
-              
-    def values(self):
+
+
+    def pickvalues(self):
+        """Evaluate an array with values of parameters.
+
+        """
 
         valueslist =[]
-        if len(element) == 1: 
-            values = np.zeros((len(self.rotor.element),len(params)))
-            for i in range(len(self.rotor.element)):
-                for j in range(len(params)):
-                    values[i][j] = self.rotor.element.params[j][0]
+        if len(self.elements) == 1:
+            attr = getattr(self.rotor, self.elements[0])
+            values = np.zeros((len(attr),len(self.params[0])))
+            for i in range(len(attr)):
+                for j in range(len(self.params[0])):
+                    attr2 = getattr(attr[i], self.params[0][j])
+                    values[i][j] = attr2[0]
 
             valueslist.append(values)
 
         else:
-            for z in range(len(element)):
-                values = np.zeros((len(self.rotor.element[z]),len(params[z])))
-                for i in range(len(self.rotor.element[z])):
-                    for j in range(len(params[z])):
-                        values[i][j] = self.rotor.element[z].params[z][j][0]   
+            for z in range(len(self.elements)):
+                attr = getattr(self.rotor, self.elements[z])
+                values = np.zeros((len(attr),len(self.params[z])))
+                for i in range(len(attr)):
+                    for j in range(len(self.params[z])):
+                        attr2 = getattr(attr[i], self.params[z][j])
+                        values[i][j] = attr2[0]   
 
                 valueslist.append(values)   
 
         return valueslist   
+   
 
     def limits(self):
-        """Evaluate an array with random values of the PDF.
+        """Build the distributions.
 
-        Parameters
-        ----------
-        size : int
-            The size of the array with random values.
         """
 
         if self.distribution == "Normal":
-            std = 
+            distributions =[]
+            values = self.pickvalues()
+            for z in range(len(self.elements)):
+                attr = getattr(rotor1, self.elements[z])
+                for i in range(len(attr)):
+                    for j in range(len(self.params[z])):
+                        std = values[z][i][j] * self.erro/2
+
+                        distributions.append(ST_Distribution(name = self.distribution, 
+                                                             info =[values[z][i][j],std],
+                                                             param = self.params[z][j]))
 
                 
         elif self.distribution == "Uniform":
-            Dist = sp.stats.uniform(loc = self.info[0], scale=self.info[1]-self.info[0])
-            val = Dist.rvs(size)[0:size]
+            distributions =[]
+            values = self.pickvalues()
+            for z in range(len(self.elements)):
+                attr = getattr(rotor1, self.elements[z])
+                for i in range(len(attr)):
+                    for j in range(len(self.params[z])):
+                        limsup = values[z][i][j] *(1 + self.erro)
+                        liminf = values[z][i][j] *(1 - self.erro)
+
+                        distributions.append(ST_Distribution(name = self.distribution, 
+                                                             info =[liminf,limsup-liminf],
+                                                             param = self.params[z][j]))
 
                 
         else:
             raise KeyError("Wrong Name: "+self.distribution+".")
 
-        return val
+        return distributions
