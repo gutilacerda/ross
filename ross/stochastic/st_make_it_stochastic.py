@@ -10,6 +10,7 @@ from st_bearing_seal_element import ST_BearingElement2
 from st_distributions import ST_Distribution
 from st_rotor_assembly import ST_Rotor2
 
+
 from ross.units import check_units
 
 class ST_Make_it_Stochastic():
@@ -34,7 +35,7 @@ class ST_Make_it_Stochastic():
 
     @check_units
     def __init__(
-        self, rotor, elements, params, distribution = 'Normal' ,erro = 5/100, **kwargs
+        self, rotor, elements, params, distribution = 'Normal',erro = 5/100, **kwargs
     ):
         self.rotor = rotor
         self.elements = elements
@@ -122,3 +123,34 @@ class ST_Make_it_Stochastic():
             raise KeyError("Wrong Name: "+self.distribution+".")
 
         return distributions
+    
+    
+    def switch_rotor_values(self):
+        ''' Modifing the chosen values of the rotor.
+         
+        '''
+        
+        distributions = self.limits()
+        modified_rotor = rs.Rotor(self.rotor.shaft_elements, self.rotor.disk_elements, self.rotor.bearing_elements)
+        
+        for idk,k in enumerate(self.elements):
+            if k=='bearing_elements':
+                for i in range(len(modified_rotor.bearing_elements)):
+                    for idj,j in enumerate(self.params[idk]):
+                        try:
+                            setattr(modified_rotor.bearing_elements[i], j, distributions[idj].value(1))
+                        except:
+                            raise KeyError("Wrong Name: "+self.params[idk][j]+ " for "+ k+ ".")
+        
+            if k =='disk' :
+                for i in range(len(modified_rotor.disk_elements)):
+                    for idj,j in enumerate(self.params[idk]):
+                        try:
+                            setattr(modified_rotor.disk_elements[i], j, distributions[idj].value(1))
+                        except:
+                            raise KeyError("Wrong Name: "+self.params[idk][j]+ " for "+ k+ ".")
+        
+        
+        return modified_rotor
+
+                    
