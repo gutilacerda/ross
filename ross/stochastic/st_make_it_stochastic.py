@@ -5,7 +5,9 @@ This module convert an deterministic rotor to stochastic rotor.
 
 import numpy as np
 import scipy as sp
+import copy as cp
 
+from ross.rotor_assembly import Rotor
 from st_bearing_seal_element import ST_BearingElement2
 from st_distributions import ST_Distribution
 from st_rotor_assembly import ST_Rotor2
@@ -131,7 +133,12 @@ class ST_Make_it_Stochastic():
         '''
         
         distributions = self.limits()
-        modified_rotor = rs.Rotor(self.rotor.shaft_elements, self.rotor.disk_elements, self.rotor.bearing_elements)
+
+        shaft = cp.deepcopy(self.rotor.shaft_elements)
+        disks = cp.deepcopy(self.rotor.disk_elements)
+        bearings = cp.deepcopy(self.rotor.bearing_elements)
+
+        modified_rotor = Rotor(shaft, disks, bearings)
         
         for idk,k in enumerate(self.elements):
             if k=='bearing_elements':
@@ -152,5 +159,94 @@ class ST_Make_it_Stochastic():
         
         
         return modified_rotor
+    
+    def getting_rotors(self):
+        
+        values = self.pickvalues()
+        
+        limsups = []
+        liminfs = []
+        for z in range(len(self.elements)):
+            attr = getattr(rotor1, self.elements[z])
+            for i in range(len(attr)):
+                for j in range(len(self.params[z])):
+                    limsup = values[z][i][j] *(1 + self.erro)
+                    liminf = values[z][i][j] *(1 - self.erro)
+                    
+                    limsups.append(limsup)
+                    liminfs.append(liminf)
+        
+        shaft = cp.deepcopy(self.rotor.shaft_elements)
+        disks = cp.deepcopy(self.rotor.disk_elements)
+        bearings = cp.deepcopy(self.rotor.bearing_elements)
+        
+        rotor = rs.Rotor(shaft, disks, bearings)
+        
+        modified_rotor = cp.deepcopy(rotor)
+        
+        modified_rotor2 = cp.deepcopy(rotor)
+        
+        rotors = []
+        #rotors.append(rotor)
+        
+        for idk,k in enumerate(self.elements):
+            if k=='bearing_elements':
+                for i in range(len(modified_rotor.bearing_elements)):
+                    for idj,j in enumerate(self.params[idk]):
+                        try:
+                            setattr(modified_rotor.bearing_elements[i], j, liminfs[idj])
+                            setattr(modified_rotor2.bearing_elements[i], j, limsups[idj])
+                        except:
+                            raise KeyError("Wrong Name: "+self.params[idk][j]+ " for "+ k+ ".")
+        
+        rotors.append(modified_rotor)
+        rotors.append(rotor)
+        rotors.append(modified_rotor2)
+        
+        return rotors
+        
+        
+    def just_to_see_Freq(self,
+        inp,
+        out,
+        speed_range=None,
+        modes=None,
+        cluster_points=False,
+        num_modes=12,
+        num_points=10,
+        rtol=0.005,
+    ):
+        
+        rotors = self.getting_rotors()
+        
+        FRF_size = len(speed_range)
+        freq_resp = np.empty((FRF_size, len(rotors)), dtype=complex)
+        velc_resp = np.empty((FRF_size, len(rotors)), dtype=complex)
+        accl_resp = np.empty((FRF_size, len(rotors)), dtype=complex)
+
+        # Monte Carlo - results storage
+        for i in range(len(rotors)):
+            rotor = rotors[i]
+            results = rotor.run_freq_response(
+                speed_range,
+                modes,
+                cluster_points,
+                num_modes,
+                num_points,
+                rtol,
+            )
+
+            freq_resp[:, i] = results.freq_resp[inp, out, :]
+            velc_resp[:, i] = results.velc_resp[inp, out, :]
+            accl_resp[:, i] = results.accl_resp[inp, out, :]
+        
+        results = st_Frequency(
+            speed_range, 
+            freq_resp, 
+            velc_resp, 
+            accl_resp
+        )
+
+        return results
 
                     
