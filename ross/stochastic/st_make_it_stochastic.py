@@ -155,7 +155,7 @@ class ST_Make_it_Stochastic():
             for z in range(len(self.elements)):
                 if self.elements[z] != 'shaft_materials':
                     listdist =[]
-                    attr = getattr(rotor1, self.elements[z])
+                    attr = getattr(self.rotor, self.elements[z])
                     for i in range(len(attr)):
                         for j in range(len(self.params[z])):
                             limsup = values[z][i][j] *(1 + self.erro)
