@@ -6,8 +6,13 @@ This module convert an deterministic rotor to stochastic rotor.
 import numpy as np
 import scipy as sp
 import copy as cp
+import numbers
 
 from ross.rotor_assembly import Rotor
+from ross.materials import Material
+from ross.bearing_seal_element import BearingElement
+from ross.shaft_element import ShaftElement
+from ross.disk_element import DiskElement
 from st_bearing_seal_element import ST_BearingElement2
 from st_distributions import ST_Distribution
 from st_rotor_assembly import ST_Rotor2
@@ -48,7 +53,7 @@ class ST_Make_it_Stochastic():
         self.erro = erro
         
         attribute_dict = dict(
-            rotor=rotor
+            rotor=rotor,
             elements=elements,
             params=params,
             distribution = distribution,
@@ -75,6 +80,30 @@ class ST_Make_it_Stochastic():
 
         else:
             for z in range(len(self.elements)):
+                if self.elements[z] == 'shaft_materials':
+                    attr = getattr(self.rotor, 'shaft_elements')
+                    values = np.zeros((len(attr),len(self.params[z])))
+                    for i in range(len(attr)):
+                        for j in range(len(self.params[z])):
+                            attr2 = getattr(attr[i], 'material')
+                            attr3 = getattr(attr2, self.params[z][j])
+                            values[i][j] = attr3
+
+                else:
+                    attr = getattr(self.rotor, self.elements[z])
+                    values = np.zeros((len(attr),len(self.params[z])))
+                    for i in range(len(attr)):
+                        for j in range(len(self.params[z])):
+                            attr2 = getattr(attr[i], self.params[z][j])
+                            if isinstance(attr2, list):
+                                values[i][j] = attr2[0]   
+                            if isinstance(attr2, numbers.Number):
+                                values[i][j] = attr2
+
+                valueslist.append(values) 
+
+            '''
+            for z in range(len(self.elements)):
                 attr = getattr(self.rotor, self.elements[z])
                 values = np.zeros((len(attr),len(self.params[z])))
                 for i in range(len(attr)):
@@ -83,7 +112,7 @@ class ST_Make_it_Stochastic():
                         values[i][j] = attr2[0]   
 
                 valueslist.append(values)   
-
+            '''
         return valueslist   
    
 
@@ -96,30 +125,58 @@ class ST_Make_it_Stochastic():
             distributions =[]
             values = self.pickvalues()
             for z in range(len(self.elements)):
-                attr = getattr(rotor1, self.elements[z])
-                for i in range(len(attr)):
-                    for j in range(len(self.params[z])):
-                        std = values[z][i][j] * self.erro/2
+                if self.elements[z] != 'shaft_materials':
+                    listdist=[]            
+                    attr = getattr(self.rotor, self.elements[z])
+                    for i in range(len(attr)):
+                        for j in range(len(self.params[z])):
+                            std = values[z][i][j] * self.erro/2
 
-                        distributions.append(ST_Distribution(name = self.distribution, 
-                                                             info =[values[z][i][j],std],
-                                                             param = self.params[z][j]))
+                            listdist.append(ST_Distribution(name = self.distribution, 
+                                                                info =[values[z][i][j],std],
+                                                                param = self.params[z][j]))
+                    distributions.append(listdist)
 
+                else:
+                    listdist=[]
+                    attr = getattr(self.rotor, 'shaft_elements')
+                    for i in range(len(attr)):
+                        for j in range(len(self.params[z])):
+                            std = values[z][i][j] * self.erro/2
+
+                            listdist.append(ST_Distribution(name = self.distribution, 
+                                                                info =[values[z][i][j],std],
+                                                                param = self.params[z][j]))
+                    distributions.append(listdist)
                 
         elif self.distribution == "Uniform":
             distributions =[]
             values = self.pickvalues()
             for z in range(len(self.elements)):
-                attr = getattr(rotor1, self.elements[z])
-                for i in range(len(attr)):
-                    for j in range(len(self.params[z])):
-                        limsup = values[z][i][j] *(1 + self.erro)
-                        liminf = values[z][i][j] *(1 - self.erro)
+                if self.elements[z] != 'shaft_materials':
+                    listdist =[]
+                    attr = getattr(rotor1, self.elements[z])
+                    for i in range(len(attr)):
+                        for j in range(len(self.params[z])):
+                            limsup = values[z][i][j] *(1 + self.erro)
+                            liminf = values[z][i][j] *(1 - self.erro)
 
-                        distributions.append(ST_Distribution(name = self.distribution, 
-                                                             info =[liminf,limsup-liminf],
-                                                             param = self.params[z][j]))
+                            listdist.append(ST_Distribution(name = self.distribution, 
+                                                                info =[liminf,limsup-liminf],
+                                                                param = self.params[z][j]))
+                    distributions.append(listdist)
+                else:
+                    listdist=[]
+                    attr = getattr(self.rotor, 'shaft_elements') 
+                    for i in range(len(attr)):
+                        for j in range(len(self.params[z])):
+                            limsup = values[z][i][j] *(1 + self.erro)
+                            liminf = values[z][i][j] *(1 - self.erro)
 
+                            listdist.append(ST_Distribution(name = self.distribution, 
+                                                                info =[liminf,limsup-liminf],
+                                                                param = self.params[z][j]))
+                    distributions.append(listdist)
                 
         else:
             raise KeyError("Wrong Name: "+self.distribution+".")
@@ -145,20 +202,81 @@ class ST_Make_it_Stochastic():
                 for i in range(len(modified_rotor.bearing_elements)):
                     for idj,j in enumerate(self.params[idk]):
                         try:
-                            setattr(modified_rotor.bearing_elements[i], j, distributions[idj].value(1))
+                            setattr(modified_rotor.bearing_elements[i], j, distributions[idk][idj].value(1))
                         except:
                             raise KeyError("Wrong Name: "+self.params[idk][j]+ " for "+ k+ ".")
         
-            if k =='disk' :
+            if k =='disk_elements' :
                 for i in range(len(modified_rotor.disk_elements)):
                     for idj,j in enumerate(self.params[idk]):
                         try:
-                            setattr(modified_rotor.disk_elements[i], j, distributions[idj].value(1))
+                            setattr(modified_rotor.disk_elements[i], j, distributions[idk][idj].value(1)[0])
                         except:
                             raise KeyError("Wrong Name: "+self.params[idk][j]+ " for "+ k+ ".")
-        
-        
-        return modified_rotor
+
+            if k =='shaft_elements' :
+                for i in range(len(modified_rotor.shaft_elements)):
+                    for idj,j in enumerate(self.params[idk]):
+                        try:
+                            setattr(modified_rotor.shaft_elements[i], j, distributions[idk][idj].value(1)[0])
+                        except:
+                            raise KeyError("Wrong Name: "+self.params[idk][j]+ " for "+ k+ ".")
+
+            if k =='shaft_materials' :
+                for i in range(len(modified_rotor.shaft_elements)):
+                    for idj,j in enumerate(self.params[idk]):
+                        try:
+                            attr2 = getattr(modified_rotor.shaft_elements[i], 'material')
+                            setattr(attr2, j, distributions[idk][idj].value(1)[0])
+                        except:
+                            raise KeyError("Wrong Name: "+self.params[idk][j]+ " for "+ k+ ".")
+
+        # declarando os mancais
+        shaftlist = []
+
+        for i in range(len(modified_rotor.shaft_elements)):
+            material = Material(name = modified_rotor.shaft_elements[i].material.name,
+                                rho = modified_rotor.shaft_elements[i].material.rho,
+                                E = modified_rotor.shaft_elements[i].material.E,
+                                G_s = modified_rotor.shaft_elements[i].material.G_s
+                                )
+            shaftlist.append(ShaftElement(L = modified_rotor.shaft_elements[i].L,
+                                            idl = modified_rotor.shaft_elements[i].idl,
+                                            odl = modified_rotor.shaft_elements[i].odl,
+                                            material = material,
+                                            shear_effects = modified_rotor.shaft_elements[i].shear_effects,
+                                            rotary_inertia = modified_rotor.shaft_elements[i].rotary_inertia,
+                                            gyroscopic = modified_rotor.shaft_elements[i].gyroscopic
+                                            ))
+
+
+        bearinglist = []
+
+        for i in range(len(modified_rotor.bearing_elements)):
+            bearinglist.append(BearingElement(n=modified_rotor.bearing_elements[i].n, 
+                                        n_link=modified_rotor.bearing_elements[i].n_link ,
+                                        kxx = modified_rotor.bearing_elements[i].kxx , 
+                                        kyy = modified_rotor.bearing_elements[i].kyy , 
+                                        cxx = modified_rotor.bearing_elements[i].cxx , 
+                                        cyy = modified_rotor.bearing_elements[i].cyy , 
+                                        mxx = modified_rotor.bearing_elements[i].mxx , 
+                                        myy = modified_rotor.bearing_elements[i].myy ,
+                                        frequency = modified_rotor.bearing_elements[i].frequency
+                                        ))
+            
+        disklist = []
+
+        for i in range(len(modified_rotor.disk_elements)):
+            disklist.append(DiskElement(n = modified_rotor.disk_elements[i].n, 
+                                        Id = modified_rotor.disk_elements[i].Id,
+                                        Ip = modified_rotor.disk_elements[i].Ip,
+                                        m = modified_rotor.disk_elements[i].m,
+                                        scale_factor = modified_rotor.disk_elements[i].scale_factor,
+                                        ))
+            
+        modified_rotor2 = Rotor(shaftlist, disklist, bearinglist)
+
+        return modified_rotor2
     
     def getting_rotors(self):
         
@@ -167,7 +285,7 @@ class ST_Make_it_Stochastic():
         limsups = []
         liminfs = []
         for z in range(len(self.elements)):
-            attr = getattr(rotor1, self.elements[z])
+            attr = getattr(self.rotor, self.elements[z])
             for i in range(len(attr)):
                 for j in range(len(self.params[z])):
                     limsup = values[z][i][j] *(1 + self.erro)
@@ -180,7 +298,7 @@ class ST_Make_it_Stochastic():
         disks = cp.deepcopy(self.rotor.disk_elements)
         bearings = cp.deepcopy(self.rotor.bearing_elements)
         
-        rotor = rs.Rotor(shaft, disks, bearings)
+        rotor = Rotor(shaft, disks, bearings)
         
         modified_rotor = cp.deepcopy(rotor)
         
