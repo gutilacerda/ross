@@ -4,7 +4,6 @@ This module convert an deterministic rotor to stochastic rotor.
 """
 
 import numpy as np
-import scipy as sp
 import copy as cp
 import numbers
 
@@ -13,9 +12,9 @@ from ross.materials import Material
 from ross.bearing_seal_element import BearingElement
 from ross.shaft_element import ShaftElement
 from ross.disk_element import DiskElement
-from st_bearing_seal_element import ST_BearingElement2
+
 from st_distributions import ST_Distribution
-from st_rotor_assembly import ST_Rotor2
+from st_results import (st_Frequency, st_Time, st_Campbell,st_Forced)
 
 
 from ross.units import check_units
@@ -27,11 +26,11 @@ class ST_Make_it_Stochastic():
 
     Parameters
     ----------
-    name : str, list
-        Distribution type.
-    info : float, list
-        The information needed to built the Distribution.
-    param : str, list, pint.Quantity
+    rotor : rotor in ROSS
+        Rotor model in ROSS type.
+    elements : str, list
+        The random element or a a list of random elements.
+    param : str, list
         The random parameter or a list of random parameters.
     
 
@@ -363,6 +362,184 @@ class ST_Make_it_Stochastic():
             freq_resp, 
             velc_resp, 
             accl_resp
+        )
+
+        return results
+    
+    def run_stFreq(
+        self,
+        inp,
+        out,
+        NMC,
+        speed_range=None,
+        modes=None,
+        cluster_points=False,
+        num_modes=12,
+        num_points=10,
+        rtol=0.005,
+    ):
+
+        FRF_size = len(speed_range)
+        freq_resp = np.empty((FRF_size, NMC), dtype=complex)
+        velc_resp = np.empty((FRF_size, NMC), dtype=complex)
+        accl_resp = np.empty((FRF_size, NMC), dtype=complex)
+
+        # Monte Carlo - results storage
+        for i in range(NMC):
+            rotor_case = self.switch_rotor_values()
+            results = rotor_case.run_freq_response(
+                speed_range,
+                modes,
+                cluster_points,
+                num_modes,
+                num_points,
+                rtol,
+            )
+
+            freq_resp[:, i] = results.freq_resp[inp, out, :]
+            velc_resp[:, i] = results.velc_resp[inp, out, :]
+            accl_resp[:, i] = results.accl_resp[inp, out, :]
+        
+        results = st_Frequency(
+            speed_range, 
+            freq_resp, 
+            velc_resp, 
+            accl_resp
+        )
+
+        return results
+    
+    def run_stCampbell(self, 
+                       speed_range,
+                       NMC, 
+                       frequencies=6, 
+                       frequency_type="wd", 
+                       ):
+        self.speed_range = speed_range
+        self.NMC = NMC
+        CAMP_size = len(speed_range)
+        
+        wd = np.zeros((frequencies, CAMP_size, NMC))
+        log_dec = np.zeros((frequencies, CAMP_size, NMC))
+        for y in range(NMC):
+            rotor_case = self.switch_rotor_values()
+            result = rotor_case.run_campbell(speed_range, frequencies, frequency_type)
+            for j in range(frequencies):
+                wd[j, :, y] = result.wd[:, j]
+                log_dec[j, :, y] = result.log_dec[:, j]
+
+        results = st_Campbell(
+            speed_range, 
+            wd, 
+            log_dec)
+        return results
+    
+    def run_stTime(self, 
+                   speed, 
+                   force, 
+                   time, 
+                   NMC): #TIME RESPONSE
+        self.time = time
+        self.force = force
+        self.speed = speed
+        self.NMC = NMC
+
+        #nodes = self.nodes()
+
+        xout = np.zeros((NMC, len(time), 2 * self.rotor.ndof)) #PQ 2NDOF
+        yout = np.zeros((NMC, len(time), self.rotor.ndof))
+        
+        #resp_stochTime = np.zeros((NMC, len(time), ndof,2))
+        resp_stochTime=[]
+
+        # Monte Carlo - results storage
+        for u in range(self.NMC):
+            rotor_case = self.switch_rotor_values()
+            response = rotor_case.run_time_response(self.speed, self.force, self.time)
+            xout[u] = response.xout
+            yout[u] = response.yout
+
+        
+        resp_stochTime.append(xout)
+        resp_stochTime.append(yout)
+        self.resp_stochTime = resp_stochTime
+
+        results = st_Time(
+            self.time,
+            self.resp_stochTime,
+            self.rotor.nodes,
+            self.rotor.number_dof,
+            self.rotor.nodes_pos,
+            self.rotor.link_nodes)
+        return results  
+    
+    def run_stUnbalance(
+        self,
+        node,
+        unbalance_magnitude,
+        unbalance_phase,
+        NMC,
+        frequency_range=None,
+        modes=None,
+        cluster_points=False,
+        num_modes=12,
+        num_points=10,
+        rtol=0.005,
+    ):
+        
+        freq_size = len(frequency_range)
+        ndof = self.rotor.ndof
+
+        forced_resp = np.zeros((NMC, ndof, freq_size), dtype=complex)
+        velc_resp = np.zeros((NMC, ndof, freq_size), dtype=complex)
+        accl_resp = np.zeros((NMC, ndof, freq_size), dtype=complex)
+        
+        if type(unbalance_magnitude.is_random[0]) == str:                
+            self.is_random.add('unbalance_magnitude')
+        
+        if type(unbalance_phase.is_random[0]) == str:                
+            self.is_random.add('unbalance_phase')
+
+
+        # Monte Carlo - results storage
+        for i in range(NMC):
+            if 'unbalance_magnitude' in self.is_random:
+                unmag = unbalance_magnitude.value(1)[0]
+            else:
+                unmag = unbalance_magnitude
+
+            if 'unbalance_phase' in self.is_random:
+                unphase = unbalance_phase.value(1)[0]
+
+            else:
+                unphase = unbalance_phase
+
+            rotor_case = self.switch_rotor_values()
+            results = rotor_case.run_unbalance_response(
+                    node, 
+                    unmag, 
+                    unphase, 
+                    frequency_range,
+                    modes=modes,
+                    cluster_points=cluster_points,
+                    num_modes=num_modes,
+                    num_points=num_points,
+                    rtol=rtol,
+                )
+
+            forced_resp[:, i] = results.forced_resp[inp, out, :]
+            velc_resp[:, i] = results.velc_resp[inp, out, :]
+            accl_resp[:, i] = results.accl_resp[inp, out, :]
+        
+
+        results = st_Forced(
+            forced_resp=forced_resp,
+            frequency_range=frequency_range,
+            velc_resp=velc_resp,
+            accl_resp=accl_resp,
+            number_dof=self.rotor.number_dof,
+            nodes=self.rotor.nodes,
+            link_nodes=self.rotor.link_nodes,
         )
 
         return results

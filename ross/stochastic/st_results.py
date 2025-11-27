@@ -721,11 +721,21 @@ class st_Frequency(ST_Results):
         
 class st_Time(ST_Results):
 
-    def __init__(self, time, resp_stochTime,ndof,nodes_pos):
+    def __init__(self, 
+                 time, 
+                 resp_stochTime,
+                 nodes, 
+                 ndof, 
+                 nodes_pos, 
+                 link_nodes
+                 ):
+        
         self.time = time
         self.resp_stochTime = resp_stochTime
+        self.nodes = nodes
         self.ndof = ndof
         self.nodes_pos = nodes_pos
+        self.link_nodes = link_nodes
 
 
     def xout(self):
@@ -748,14 +758,30 @@ class st_Time(ST_Results):
         percentile = np.sort(percentile)
         fig = go.Figure()
         for i, p in enumerate(probe):
-            fix_dof = 0 #precisa corrigir
-            dofx = self.ndof * p[0] - fix_dof
-            dofy = self.ndof * p[0] + 1 - fix_dof
-            angle = Q_(p[1], probe_units).to("rad").m
             try:
-                probe_tag = p[2]
-            except IndexError:
-                probe_tag = f"Probe {i+1} - Node {p[0]}"
+                node = p.node
+                angle = p.angle
+                probe_tag = p.tag or p.get_label(i + 1)
+                if p.direction == "axial":
+                    continue
+            except AttributeError:
+                node = p[0]
+                warn(
+                    "The use of tuples in the probe argument is deprecated. Use the Probe class instead.",
+                    DeprecationWarning,
+                )
+                try:
+                    angle = Q_(p[1], probe_units).to("rad").m
+                except TypeError:
+                    angle = p[1]
+                try:
+                    probe_tag = p[2]
+                except IndexError:
+                    probe_tag = f"Probe {i + 1} - Node {p[0]}"
+
+            fix_dof = (node - nodes[-1] - 1) * ndof // 2 if node in link_nodes else 0
+            dofx = ndof * node - fix_dof
+            dofy = ndof * node + 1 - fix_dof
 
             # fmt: off
             operator = np.array(
@@ -832,9 +858,21 @@ class st_Time(ST_Results):
                 percentile=[],
                 conf_interval=[],
                 displacement_units="m",):
-        fix_dof = 0 #precisa corrigir
-        dofx = self.ndof * node - fix_dof
-        dofy = self.ndof * node + 1 - fix_dof
+        
+
+        nodes = self.nodes
+        link_nodes = self.link_nodes
+        ndof = self.ndof
+
+        fix_dof = (node - nodes[-1] - 1) * ndof // 2 if node in link_nodes else 0
+        dofx = ndof * node - fix_dof
+        dofy = ndof * node + 1 - fix_dof
+
+        conf_interval = np.sort(conf_interval)
+        percentile = np.sort(percentile)
+
+        if fig is None:
+            fig = go.Figure()
 
         fig = go.Figure()
 
@@ -1371,7 +1409,7 @@ class st_Forced(ST_Results):
         frequency_range,
         number_dof,
         nodes,
-        #link_nodes,
+        link_nodes,
     ):
         self.forced_resp = forced_resp
         self.velc_resp = velc_resp
@@ -1379,7 +1417,7 @@ class st_Forced(ST_Results):
         self.frequency_range = frequency_range
         self.number_dof = number_dof
         self.nodes = nodes
-        #self.link_nodes = link_nodes
+        self.link_nodes = link_nodes
 
         self.default_units = {
             "[length]": ["m", "forced_resp"],
@@ -1418,7 +1456,7 @@ class st_Forced(ST_Results):
         """
         ndof = self.number_dof
         nodes = self.nodes
-        #link_nodes = self.link_nodes
+        link_nodes = self.link_nodes
 
         unit_type = str(Q_(1, amplitude_units).dimensionality)
         try:
@@ -1433,7 +1471,7 @@ class st_Forced(ST_Results):
             (size, 3, len(self.frequency_range)), dtype=complex
         )
 
-        fix_dof = 0 #precisa corrigir
+        fix_dof = (node - nodes[-1] - 1) * ndof // 2 if node in link_nodes else 0
         dofx = ndof * node - fix_dof
         dofy = ndof * node + 1 - fix_dof
 
