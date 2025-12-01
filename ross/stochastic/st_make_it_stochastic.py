@@ -6,6 +6,7 @@ This module convert an deterministic rotor to stochastic rotor.
 import numpy as np
 import copy as cp
 import numbers
+import random
 
 from ross.rotor_assembly import Rotor
 from ross.materials import Material
@@ -182,6 +183,47 @@ class ST_Make_it_Stochastic():
 
         return distributions
     
+    def limits_values(self):
+        """Extreme values from each parameter.
+
+        """
+
+        ext_values = {}
+
+        values = self.pickvalues()
+        for z in range(len(self.elements)):
+            if self.elements[z] != 'shaft_materials':
+                attr = getattr(self.rotor, self.elements[z])
+                for i in range(len(attr)):
+                    for j in range(len(self.params[z])):
+                        limsup = values[z][i][j] *(1 + self.erro)
+                        liminf = values[z][i][j] *(1 - self.erro)
+
+                        if i == 0:
+                            ext_values[self.params[z][j]] = [[liminf,limsup]]
+
+                        else:
+                            ext_values[self.params[z][j]].extend([[0,0]])
+                            ext_values[self.params[z][j]][i] = [liminf,limsup]
+
+
+
+            else:
+                attr = getattr(self.rotor, 'shaft_elements') 
+                for i in range(len(attr)):
+                    for j in range(len(self.params[z])):
+                        limsup = values[z][0][j] *(1 + self.erro)
+                        liminf = values[z][0][j] *(1 - self.erro)
+
+                        if i == 0:
+                            ext_values[self.params[z][j]] = [[liminf,limsup]]
+
+                        else:
+                            ext_values[self.params[z][j]].extend([[0,0]])
+                            ext_values[self.params[z][j]][i] = [liminf,limsup]
+                
+        return ext_values
+
     
     def switch_rotor_values(self):
         ''' Modifing the chosen values of the rotor.
@@ -277,74 +319,148 @@ class ST_Make_it_Stochastic():
 
         return modified_rotor2
     
-    def getting_rotors(self):
-        
-        values = self.pickvalues()
-        
-        limsups = []
-        liminfs = []
-        for z in range(len(self.elements)):
-            attr = getattr(self.rotor, self.elements[z])
-            for i in range(len(attr)):
-                for j in range(len(self.params[z])):
-                    limsup = values[z][i][j] *(1 + self.erro)
-                    liminf = values[z][i][j] *(1 - self.erro)
-                    
-                    limsups.append(limsup)
-                    liminfs.append(liminf)
+    def extreme_samples(self, parameters, n_samples, seed):
+        random.seed(seed)
+
+        samples = []
+
+        structure = {p: len(parameters[p]) for p in parameters}
+
+        for _ in range(n_samples):
+            combo = {}
+
+            for param, n_sub in structure.items():
+                combo[param] = []
+                for j in range(n_sub):
+                    bit = random.randint(0, 1)  # 0=min, 1=max
+                    valor = parameters[param][j][bit]
+                    combo[param].append(valor)
+
+            samples.append(combo)
+
+        return samples
+    
+    def switch_rotor_extremes(self,sample):
+        ''' Modifing the chosen values of the rotor.
+            
+        '''
         
         shaft = cp.deepcopy(self.rotor.shaft_elements)
         disks = cp.deepcopy(self.rotor.disk_elements)
         bearings = cp.deepcopy(self.rotor.bearing_elements)
-        
-        rotor = Rotor(shaft, disks, bearings)
-        
-        modified_rotor = cp.deepcopy(rotor)
-        
-        modified_rotor2 = cp.deepcopy(rotor)
-        
-        rotors = []
-        #rotors.append(rotor)
+
+        modified_rotor = Rotor(shaft, disks, bearings)
+
         
         for idk,k in enumerate(self.elements):
             if k=='bearing_elements':
                 for i in range(len(modified_rotor.bearing_elements)):
-                    for idj,j in enumerate(self.params[idk]):
+                    for j in self.params[idk]:
                         try:
-                            setattr(modified_rotor.bearing_elements[i], j, liminfs[idj])
-                            setattr(modified_rotor2.bearing_elements[i], j, limsups[idj])
+                            setattr(modified_rotor.bearing_elements[i], j, sample[j][i])
                         except:
                             raise KeyError("Wrong Name: "+self.params[idk][j]+ " for "+ k+ ".")
         
-        rotors.append(modified_rotor)
-        rotors.append(rotor)
-        rotors.append(modified_rotor2)
-        
-        return rotors
+            if k =='disk_elements' :
+                for i in range(len(modified_rotor.disk_elements)):
+                    for j in self.params[idk]:
+                        try:
+                            setattr(modified_rotor.disk_elements[i], j, sample[j][i])
+                        except:
+                            raise KeyError("Wrong Name: "+self.params[idk][j]+ " for "+ k+ ".")
+
+            if k =='shaft_elements' :
+                for i in range(len(modified_rotor.shaft_elements)):
+                    for j in self.params[idk]:
+                        try:
+                            setattr(modified_rotor.shaft_elements[i], j, sample[j][i])
+                        except:
+                            raise KeyError("Wrong Name: "+self.params[idk][j]+ " for "+ k+ ".")
+
+            if k =='shaft_materials' :
+                for i in range(len(modified_rotor.shaft_elements)):
+                    for j in self.params[idk]:
+                        try:
+                            attr2 = getattr(modified_rotor.shaft_elements[i], 'material')
+                            setattr(attr2, j, sample[j][i])
+                        except:
+                            raise KeyError("Wrong Name: "+self.params[idk][j]+ " for "+ k+ ".")
+
+        # declarando os mancais
+        shaftlist = []
+
+        for i in range(len(modified_rotor.shaft_elements)):
+            material = Material(name = modified_rotor.shaft_elements[i].material.name,
+                                rho = modified_rotor.shaft_elements[i].material.rho,
+                                E = modified_rotor.shaft_elements[i].material.E,
+                                G_s = modified_rotor.shaft_elements[i].material.G_s
+                                )
+            shaftlist.append(ShaftElement(L = modified_rotor.shaft_elements[i].L,
+                                            idl = modified_rotor.shaft_elements[i].idl,
+                                            odl = modified_rotor.shaft_elements[i].odl,
+                                            material = material,
+                                            shear_effects = modified_rotor.shaft_elements[i].shear_effects,
+                                            rotary_inertia = modified_rotor.shaft_elements[i].rotary_inertia,
+                                            gyroscopic = modified_rotor.shaft_elements[i].gyroscopic
+                                            ))
+
+
+        bearinglist = []
+
+        for i in range(len(modified_rotor.bearing_elements)):
+            bearinglist.append(BearingElement(n=modified_rotor.bearing_elements[i].n, 
+                                        n_link=modified_rotor.bearing_elements[i].n_link ,
+                                        kxx = modified_rotor.bearing_elements[i].kxx , 
+                                        kyy = modified_rotor.bearing_elements[i].kyy , 
+                                        cxx = modified_rotor.bearing_elements[i].cxx , 
+                                        cyy = modified_rotor.bearing_elements[i].cyy , 
+                                        mxx = modified_rotor.bearing_elements[i].mxx , 
+                                        myy = modified_rotor.bearing_elements[i].myy ,
+                                        frequency = modified_rotor.bearing_elements[i].frequency
+                                        ))
+            
+        disklist = []
+
+        for i in range(len(modified_rotor.disk_elements)):
+            disklist.append(DiskElement(n = modified_rotor.disk_elements[i].n, 
+                                        Id = modified_rotor.disk_elements[i].Id,
+                                        Ip = modified_rotor.disk_elements[i].Ip,
+                                        m = modified_rotor.disk_elements[i].m,
+                                        scale_factor = modified_rotor.disk_elements[i].scale_factor,
+                                        ))
+            
+        modified_rotor2 = Rotor(shaftlist, disklist, bearinglist)
+
+        return modified_rotor2
         
         
     def just_to_see_Freq(self,
         inp,
         out,
+        n_samples=10,
         speed_range=None,
         modes=None,
         cluster_points=False,
+        seed=42,
         num_modes=12,
         num_points=10,
         rtol=0.005,
     ):
         
-        rotors = self.getting_rotors()
-        
+        values = self.limits_values()
+        samples = self.extreme_samples(values,n_samples,seed)
+      
         FRF_size = len(speed_range)
-        freq_resp = np.empty((FRF_size, len(rotors)), dtype=complex)
-        velc_resp = np.empty((FRF_size, len(rotors)), dtype=complex)
-        accl_resp = np.empty((FRF_size, len(rotors)), dtype=complex)
+        freq_resp = np.empty((FRF_size, n_samples), dtype=complex)
+        velc_resp = np.empty((FRF_size, n_samples), dtype=complex)
+        accl_resp = np.empty((FRF_size, n_samples), dtype=complex)
 
         # Monte Carlo - results storage
-        for i in range(len(rotors)):
-            rotor = rotors[i]
-            results = rotor.run_freq_response(
+        for i in range(n_samples):
+
+            sample = samples[i]
+            rotor_case = self.switch_rotor_extremes(sample)
+            results = rotor_case.run_freq_response(
                 speed_range,
                 modes,
                 cluster_points,

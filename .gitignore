@@ -135,3 +135,4 @@ pip-selfcheck.json
 !/tools/plots/index.html
 /docs/references/generated/
 ross/stochastic/testes.ipynb
+ross/stochastic/testes_extremos.ipynb
