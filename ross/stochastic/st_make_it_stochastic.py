@@ -42,7 +42,7 @@ class ST_Make_it_Stochastic():
 
     @check_units
     def __init__(
-        self, rotor, elements, params, distribution = 'Normal',erro = 5/100, **kwargs
+        self, rotor, elements, params, distribution = 'Normal',erro = 5/100, store = False, **kwargs
     ):
         self.rotor = rotor
         self.elements = elements
@@ -51,6 +51,8 @@ class ST_Make_it_Stochastic():
         self.params = params
         self.distribution = distribution
         self.erro = erro
+        self.store = store
+        #self.samples = None
         
         attribute_dict = dict(
             rotor=rotor,
@@ -58,9 +60,9 @@ class ST_Make_it_Stochastic():
             params=params,
             distribution = distribution,
             erro=erro,
+            store=store,
         )
         self.attribute_dict = attribute_dict
-
 
     def pickvalues(self):
         """Evaluate an array with values of parameters.
@@ -115,6 +117,58 @@ class ST_Make_it_Stochastic():
             '''
         return valueslist   
    
+    def storevalues(self,rotor_case):
+        """Evaluate an array with values of parameters.
+
+        """
+
+        valueslist =[]
+        if len(self.elements) == 1:
+            attr = getattr(rotor_case, self.elements[0])
+            values = np.zeros((len(attr),len(self.params[0])))
+            for i in range(len(attr)):
+                for j in range(len(self.params[0])):
+                    attr2 = getattr(attr[i], self.params[0][j])
+                    values[i][j] = attr2[0]
+
+            valueslist.append(values)
+
+        else:
+            for z in range(len(self.elements)):
+                if self.elements[z] == 'shaft_materials':
+                    attr = getattr(rotor_case, 'shaft_elements')
+                    values = np.zeros((len(attr),len(self.params[z])))
+                    for i in range(len(attr)):
+                        for j in range(len(self.params[z])):
+                            attr2 = getattr(attr[i], 'material')
+                            attr3 = getattr(attr2, self.params[z][j])
+                            values[i][j] = attr3
+
+                else:
+                    attr = getattr(rotor_case, self.elements[z])
+                    values = np.zeros((len(attr),len(self.params[z])))
+                    for i in range(len(attr)):
+                        for j in range(len(self.params[z])):
+                            attr2 = getattr(attr[i], self.params[z][j])
+                            if isinstance(attr2, numbers.Number):
+                                values[i][j] = attr2
+                            else:
+                                values[i][j] = attr2[0]    
+
+                valueslist.append(values) 
+
+            '''
+            for z in range(len(self.elements)):
+                attr = getattr(self.rotor, self.elements[z])
+                values = np.zeros((len(attr),len(self.params[z])))
+                for i in range(len(attr)):
+                    for j in range(len(self.params[z])):
+                        attr2 = getattr(attr[i], self.params[z][j])
+                        values[i][j] = attr2[0]   
+
+                valueslist.append(values)   
+            '''
+        return valueslist
 
     def limits(self):
         """Build the distributions.
@@ -494,15 +548,29 @@ class ST_Make_it_Stochastic():
         num_points=10,
         rtol=0.005,
     ):
-
+        
         FRF_size = len(speed_range)
         freq_resp = np.empty((FRF_size, NMC), dtype=complex)
         velc_resp = np.empty((FRF_size, NMC), dtype=complex)
         accl_resp = np.empty((FRF_size, NMC), dtype=complex)
+        samples = []
 
-        # Monte Carlo - results storage
+        if self.store :
+            samples = [
+                np.zeros((NMC, p.shape[0], p.shape[1])) 
+                for p in self.pickvalues()
+            ]
+
+        else:
+            # Um objeto "fantasma" que ignora indexação
+            class BlackHole:
+                def __setitem__(self, key, value): pass
+            samples = BlackHole()
+
         for i in range(NMC):
             rotor_case = self.switch_rotor_values()
+            for idx, pv in enumerate(self.storevalues(rotor_case)):
+                samples[idx][i] = pv   
             results = rotor_case.run_freq_response(
                 speed_range,
                 modes,
@@ -523,7 +591,7 @@ class ST_Make_it_Stochastic():
             accl_resp
         )
 
-        return results
+        return results,samples
     
     def run_stCampbell(self, 
                        speed_range,

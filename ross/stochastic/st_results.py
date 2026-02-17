@@ -857,7 +857,8 @@ class st_Time(ST_Results):
                 node,
                 percentile=[],
                 conf_interval=[],
-                displacement_units="m",):
+                displacement_units="m",
+                fig=None):
         
 
         nodes = self.nodes
@@ -871,8 +872,8 @@ class st_Time(ST_Results):
         conf_interval = np.sort(conf_interval)
         percentile = np.sort(percentile)
 
-        if fig is None:
-            fig = go.Figure()
+        #if fig is None:
+        #    fig = go.Figure()
 
         fig = go.Figure()
 
