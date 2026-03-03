@@ -605,8 +605,24 @@ class ST_Make_it_Stochastic():
         
         wd = np.zeros((frequencies, CAMP_size, NMC))
         log_dec = np.zeros((frequencies, CAMP_size, NMC))
+        samples = []
+
+        if self.store :
+            samples = [
+                np.zeros((NMC, p.shape[0], p.shape[1])) 
+                for p in self.pickvalues()
+            ]
+
+        else:
+            # Um objeto "fantasma" que ignora indexação
+            class BlackHole:
+                def __setitem__(self, key, value): pass
+            samples = BlackHole()
+        
         for y in range(NMC):
             rotor_case = self.switch_rotor_values()
+            for idx, pv in enumerate(self.storevalues(rotor_case)):
+                samples[idx][i] = pv 
             result = rotor_case.run_campbell(speed_range, frequencies, frequency_type)
             for j in range(frequencies):
                 wd[j, :, y] = result.wd[:, j]
@@ -636,9 +652,25 @@ class ST_Make_it_Stochastic():
         #resp_stochTime = np.zeros((NMC, len(time), ndof,2))
         resp_stochTime=[]
 
+        samples = []
+
+        if self.store :
+            samples = [
+                np.zeros((NMC, p.shape[0], p.shape[1])) 
+                for p in self.pickvalues()
+            ]
+
+        else:
+            # Um objeto "fantasma" que ignora indexação
+            class BlackHole:
+                def __setitem__(self, key, value): pass
+            samples = BlackHole()
+
         # Monte Carlo - results storage
         for u in range(self.NMC):
             rotor_case = self.switch_rotor_values()
+            for idx, pv in enumerate(self.storevalues(rotor_case)):
+                samples[idx][i] = pv 
             response = rotor_case.run_time_response(self.speed, self.force, self.time)
             xout[u] = response.xout
             yout[u] = response.yout
@@ -677,6 +709,20 @@ class ST_Make_it_Stochastic():
         forced_resp = np.zeros((NMC, ndof, freq_size), dtype=complex)
         velc_resp = np.zeros((NMC, ndof, freq_size), dtype=complex)
         accl_resp = np.zeros((NMC, ndof, freq_size), dtype=complex)
+
+        samples = []
+
+        if self.store :
+            samples = [
+                np.zeros((NMC, p.shape[0], p.shape[1])) 
+                for p in self.pickvalues()
+            ]
+
+        else:
+            # Um objeto "fantasma" que ignora indexação
+            class BlackHole:
+                def __setitem__(self, key, value): pass
+            samples = BlackHole()
         
         if type(unbalance_magnitude.is_random[0]) == str:                
             self.is_random.add('unbalance_magnitude')
@@ -699,6 +745,8 @@ class ST_Make_it_Stochastic():
                 unphase = unbalance_phase
 
             rotor_case = self.switch_rotor_values()
+            for idx, pv in enumerate(self.storevalues(rotor_case)):
+                samples[idx][i] = pv
             results = rotor_case.run_unbalance_response(
                     node, 
                     unmag, 
