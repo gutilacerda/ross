@@ -7,6 +7,7 @@ import inspect
 from abc import ABC
 from collections.abc import Iterable
 from pathlib import Path
+from warnings import warn
 
 import numpy as np
 import toml
@@ -777,11 +778,11 @@ class st_Time(ST_Results):
                 try:
                     probe_tag = p[2]
                 except IndexError:
-                    probe_tag = f"Probe {i + 1} - Node {p[0]}"
+                    probe_tag = f"Probe {i + 1} - Node {p.node}"
 
-            fix_dof = (node - nodes[-1] - 1) * ndof // 2 if node in link_nodes else 0
-            dofx = ndof * node - fix_dof
-            dofy = ndof * node + 1 - fix_dof
+            fix_dof = (node - self.nodes[-1] - 1) * self.ndof // 2 if node in self.link_nodes else 0
+            dofx = self.ndof * node - fix_dof
+            dofy = self.ndof * node + 1 - fix_dof
 
             # fmt: off
             operator = np.array(
@@ -1598,14 +1599,14 @@ class st_Forced(ST_Results):
         color_p = 0
 
         for i, p in enumerate(probe):
-            angle = Q_(p[1], probe_units).to("rad").m
+            angle = Q_(p.angle, probe_units).to("rad").m
             vector = self._calculate_major_axis_per_node(
-                node=p[0], angle=angle, amplitude_units=amplitude_units
+                node=p.node, angle=angle, amplitude_units=amplitude_units
             )[:, 1, :]
             try:
-                probe_tag = p[2]
+                probe_tag = p.tag
             except IndexError:
-                probe_tag = f"Probe {i+1} - Node {p[0]}"
+                probe_tag = f"Probe {i+1} - Node {p.node}"
 
             fig.add_trace(
                 go.Scatter(
@@ -1746,18 +1747,18 @@ class st_Forced(ST_Results):
 
         x = np.concatenate((frequency_range, frequency_range[::-1]))
         for i, p in enumerate(probe):
-            angle = Q_(p[1], probe_units).to("rad").m
+            angle = Q_(p.angle, probe_units).to("rad").m
             vector = self._calculate_major_axis_per_node(
-                node=p[0], angle=angle, amplitude_units=amplitude_units
+                node=p.node, angle=angle, amplitude_units=amplitude_units
             )[:, 2, :]
 
             probe_phase = np.real(vector)
             probe_phase = Q_(probe_phase, "rad").to(phase_units).m
 
             try:
-                probe_tag = p[2]
+                probe_tag = p.tag
             except IndexError:
-                probe_tag = f"Probe {i+1} - Node {p[0]}"
+                probe_tag = f"Probe {i+1} - Node {p.node}"
 
             fig.add_trace(
                 go.Scatter(
@@ -1898,22 +1899,22 @@ class st_Forced(ST_Results):
         color_i = 0
 
         for i, p in enumerate(probe):
-            angle = Q_(p[1], probe_units).to("rad").m
+            angle = Q_(p.angle, probe_units).to("rad").m
 
             mag = self._calculate_major_axis_per_node(
-                node=p[0], angle=angle, amplitude_units=amplitude_units
+                node=p.node, angle=angle, amplitude_units=amplitude_units
             )[:, 1, :]
             probe_phase = self._calculate_major_axis_per_node(
-                node=p[0], angle=angle, amplitude_units=amplitude_units
+                node=p.node, angle=angle, amplitude_units=amplitude_units
             )[:, 2, :]
 
             probe_phase = np.real(probe_phase)
             probe_phase = Q_(probe_phase, "rad").to(phase_units).m
 
             try:
-                probe_tag = p[2]
+                probe_tag = p.tag
             except IndexError:
-                probe_tag = f"Probe {i+1} - Node {p[0]}"
+                probe_tag = f"Probe {i+1} - Node {p.node}"
 
             fig.add_trace(
                 go.Scatterpolar(

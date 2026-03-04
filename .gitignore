@@ -146,3 +146,5 @@ ross/stochastic/samples1
 ross/stochastic/samples1.npy
 ross/stochastic/samples2.npy
 ross/stochastic/samples3.npy
+ross/stochastic/tutorial_part_3v2.ipynb
+ross/stochastic/probe.py

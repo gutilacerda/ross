@@ -622,7 +622,7 @@ class ST_Make_it_Stochastic():
         for y in range(NMC):
             rotor_case = self.switch_rotor_values()
             for idx, pv in enumerate(self.storevalues(rotor_case)):
-                samples[idx][i] = pv 
+                samples[idx][y] = pv 
             result = rotor_case.run_campbell(speed_range, frequencies, frequency_type)
             for j in range(frequencies):
                 wd[j, :, y] = result.wd[:, j]
@@ -632,13 +632,14 @@ class ST_Make_it_Stochastic():
             speed_range, 
             wd, 
             log_dec)
-        return results
+        return results, samples
     
     def run_stTime(self, 
                    speed, 
                    force, 
                    time, 
-                   NMC): #TIME RESPONSE
+                   NMC
+                   ): #TIME RESPONSE
         self.time = time
         self.force = force
         self.speed = speed
@@ -670,7 +671,7 @@ class ST_Make_it_Stochastic():
         for u in range(self.NMC):
             rotor_case = self.switch_rotor_values()
             for idx, pv in enumerate(self.storevalues(rotor_case)):
-                samples[idx][i] = pv 
+                samples[idx][u] = pv 
             response = rotor_case.run_time_response(self.speed, self.force, self.time)
             xout[u] = response.xout
             yout[u] = response.yout
@@ -687,24 +688,25 @@ class ST_Make_it_Stochastic():
             self.rotor.number_dof,
             self.rotor.nodes_pos,
             self.rotor.link_nodes)
-        return results  
+        return results, samples  
     
-    def run_stUnbalance(
-        self,
-        node,
-        unbalance_magnitude,
-        unbalance_phase,
-        NMC,
-        frequency_range=None,
-        modes=None,
-        cluster_points=False,
-        num_modes=12,
-        num_points=10,
-        rtol=0.005,
-    ):
+    def run_stUnbalance(self,
+                        node,
+                        unbalance_magnitude,
+                        unbalance_phase,
+                        NMC,
+                        is_random,
+                        frequency_range=None,
+                        modes=None,
+                        cluster_points=False,
+                        num_modes=12,
+                        num_points=10,
+                        rtol=0.005,
+                        ):
         
         freq_size = len(frequency_range)
         ndof = self.rotor.ndof
+        self.is_random = is_random   
 
         forced_resp = np.zeros((NMC, ndof, freq_size), dtype=complex)
         velc_resp = np.zeros((NMC, ndof, freq_size), dtype=complex)
@@ -723,23 +725,32 @@ class ST_Make_it_Stochastic():
             class BlackHole:
                 def __setitem__(self, key, value): pass
             samples = BlackHole()
-        
+        '''
         if type(unbalance_magnitude.is_random[0]) == str:                
             self.is_random.add('unbalance_magnitude')
         
         if type(unbalance_phase.is_random[0]) == str:                
             self.is_random.add('unbalance_phase')
-
+        '''
 
         # Monte Carlo - results storage
         for i in range(NMC):
             if 'unbalance_magnitude' in self.is_random:
-                unmag = unbalance_magnitude.value(1)[0]
+                std = unbalance_magnitude * self.erro/2
+                dis_mag = ST_Distribution(name=is_random[1], 
+                                          info=[unbalance_magnitude, std], 
+                                          param=is_random[0])
+
+                unmag = dis_mag.value(1)[0]
             else:
                 unmag = unbalance_magnitude
 
             if 'unbalance_phase' in self.is_random:
-                unphase = unbalance_phase.value(1)[0]
+                std = unbalance_phase * self.erro/2
+                dis_phase = ST_Distribution(name=is_random[1], 
+                                          info=[unbalance_phase, std], 
+                                          param=is_random[0])
+                unphase = dis_phase.value(1)[0]
 
             else:
                 unphase = unbalance_phase
@@ -759,9 +770,9 @@ class ST_Make_it_Stochastic():
                     rtol=rtol,
                 )
 
-            forced_resp[:, i] = results.forced_resp[inp, out, :]
-            velc_resp[:, i] = results.velc_resp[inp, out, :]
-            accl_resp[:, i] = results.accl_resp[inp, out, :]
+            forced_resp[i] = results.forced_resp
+            velc_resp[i] = results.velc_resp
+            accl_resp[i] = results.accl_resp
         
 
         results = st_Forced(
@@ -774,6 +785,6 @@ class ST_Make_it_Stochastic():
             link_nodes=self.rotor.link_nodes,
         )
 
-        return results
+        return results, samples
 
                     
